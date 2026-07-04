@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube DPDP Consent Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=SF+Pro+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --yt-black: #0f0f0f;
+            --yt-dark: #272727;
+            --yt-light: #f1f1f1;
+            --yt-gray: #aaaaaa;
+            --yt-blue: #3ea6ff;
+            --ios-green: #34c759;
+            --ios-blue: #007aff;
+            --ios-bg: #f2f2f7;
+        }
+        
+        body { font-family: 'Roboto', sans-serif; -webkit-font-smoothing: antialiased; }
+        .ios-font { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 0px; height: 0px; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .slide-up { transform: translateY(100%); transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1); }
+        .slide-up.active { transform: translateY(0); }
+        
+        .fade-in { opacity: 0; transition: opacity 0.3s ease; pointer-events: none; visibility: hidden; }
+        .fade-in.active { opacity: 1; pointer-events: auto; visibility: visible; }
+        
+        .scale-in { transform: scale(0.97); opacity: 0; transition: all 0.4s cubic-bezier(0.32, 0.72, 0, 1); position: absolute; width: 100%; top: 0; left: 0; pointer-events: none; }
+        .scale-in.active { transform: scale(1); opacity: 1; position: relative; pointer-events: auto; }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        .skeleton {
+            background: var(--yt-dark);
+            background-image: linear-gradient(90deg, var(--yt-dark) 0px, #333333 40px, var(--yt-dark) 80px);
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite linear;
+        }
+
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        .device-frame {
+            box-shadow: 0 0 0 2px #3f3f3f, 0 0 0 12px #000, 0 0 0 14px #222, 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            border-radius: 48px;
+        }
+        .dynamic-island {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            width: 126px; height: 35px; background-color: #000;
+            border-radius: 24px; z-index: 100;
+            box-shadow: inset 0 0 2px rgba(255,255,255,0.1);
+        }
+        .island-camera {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            width: 12px; height: 12px; border-radius: 50%; background: #111;
+            box-shadow: inset 0 0 4px rgba(255,255,255,0.2);
+        }
+
+        /* Glassmorphism helpers */
+        .glass-header {
+            background: rgba(242, 242, 247, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-neutral-900 flex items-center justify-center min-h-screen text-white overflow-hidden p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-800 to-neutral-950">
+
+    <div class="relative w-full max-w-[400px] h-[850px] max-h-[92vh] bg-black rounded-[48px] overflow-hidden device-frame flex flex-col isolation-auto">
+        <div class="dynamic-island">
+            <div class="island-camera"></div>
+        </div>
+        
+        <!-- ========================================== -->
+        <!-- APP VIEW (MINOR'S DEVICE)                  -->
+        <!-- ========================================== -->
+        <div id="app-view" class="flex flex-col h-full w-full absolute top-0 left-0 transition-all duration-500 z-10 bg-[var(--yt-black)]">
+            
+            <div class="flex flex-col z-20 bg-[var(--yt-black)] pt-14 pb-2 px-4 border-b border-[var(--yt-dark)]">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-1">
+                        <i class="fa-brands fa-youtube text-red-600 text-3xl"></i>
+                        <span class="text-xl font-bold tracking-tighter" style="font-family: 'Oswald', sans-serif;">YouTube</span>
+                    </div>
+                    <div class="flex items-center gap-6 text-[1.35rem] font-light">
+                        <i class="fa-solid fa-chromecast hover:text-gray-300 cursor-pointer transition"></i>
+                        <div class="relative cursor-pointer">
+                            <i class="fa-regular fa-bell hover:text-gray-300 transition"></i>
+                            <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-[var(--yt-black)]"></div>
+                        </div>
+                        <i class="fa-solid fa-magnifying-glass hover:text-gray-300 cursor-pointer transition text-[1.25rem]"></i>
+                    </div>
+                </div>
+                
+                <!-- Category Chips -->
+                <div class="flex gap-3 overflow-x-auto pb-1 hide-scrollbar">
+                    <div class="bg-white text-black px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer">All</div>
+                    <div class="bg-[var(--yt-dark)] hover:bg-[#3f3f3f] text-[var(--yt-light)] px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer transition">Gaming</div>
+                    <div class="bg-[var(--yt-dark)] hover:bg-[#3f3f3f] text-[var(--yt-light)] px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer transition">Music</div>
+                    <div class="bg-[var(--yt-dark)] hover:bg-[#3f3f3f] text-[var(--yt-light)] px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer transition">Live</div>
+                    <div class="bg-[var(--yt-dark)] hover:bg-[#3f3f3f] text-[var(--yt-light)] px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer transition">News</div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto pb-20 relative bg-[var(--yt-black)]" id="video-feed">
+                <!-- Content injected by JS -->
+            </div>
+
+            <div class="absolute bottom-0 left-0 w-full bg-[var(--yt-black)]/95 backdrop-blur-md flex justify-around py-2 px-1 text-[10px] text-[var(--yt-gray)] z-20 pb-7 border-t border-[var(--yt-dark)]">
+                <div class="flex flex-col items-center gap-1.5 text-white cursor-pointer w-16">
+                    <i class="fa-solid fa-house text-[1.35rem]"></i><span class="font-medium">Home</span>
+                </div>
+                <div class="flex flex-col items-center gap-1.5 hover:text-white transition cursor-pointer w-16">
+                    <svg viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path d="M17.77,10.32l-1.2-.5L18,9.06a3.74,3.74,0,0,0-3.5-6.62L6,6.94a3.74,3.74,0,0,0,.23,6.74l1.2.49L6,14.93a3.75,3.75,0,0,0,3.5,6.63l8.5-4.5a3.74,3.74,0,0,0-.23-6.74Zm-7.27,6.13V8.55l5.5,3.95Z"/></svg>
+                    <span>Shorts</span>
+                </div>
+                <div class="flex flex-col items-center justify-center cursor-pointer w-12">
+                    <i class="fa-regular fa-circle-plus text-[2.5rem] text-white font-light -mt-2"></i>
+                </div>
+                <div class="flex flex-col items-center gap-1.5 hover:text-white transition cursor-pointer w-16">
+                    <i class="fa-solid fa-layer-group text-[1.35rem]"></i><span>Subscriptions</span>
+                </div>
+                <div class="flex flex-col items-center gap-1.5 hover:text-white transition cursor-pointer w-16">
+                    <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-medium border border-[var(--yt-dark)]">K</div>
+                    <span>You</span>
+                </div>
+            </div>
+
+            <div id="vpc-bottom-sheet" class="absolute bottom-0 left-0 w-full bg-[#212121] rounded-t-3xl z-50 slide-up flex flex-col max-h-[90%] pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                <div class="w-full flex justify-center py-4 cursor-grab"><div class="w-12 h-1.5 bg-[#666666] rounded-full"></div></div>
+                
+                <div class="px-6 pb-2 pt-2 flex-1 overflow-hidden relative">
+                    <!-- Step 1: Pitch -->
+                    <div id="vpc-step-1" class="scale-in active">
+                        <div class="flex justify-center mb-6 mt-2">
+                            <div class="w-16 h-16 rounded-full bg-[var(--yt-blue)]/10 flex items-center justify-center text-[var(--yt-blue)] shadow-[0_0_20px_rgba(62,166,255,0.15)]">
+                                <i class="fa-solid fa-shield-halved text-3xl"></i>
+                            </div>
+                        </div>
+                        <h2 class="text-[22px] font-bold mb-3 text-center">Unlock Your YouTube</h2>
+                        <p class="text-[var(--yt-gray)] text-[15px] mb-8 text-center leading-relaxed px-2">
+                            Under India's Data Protection Act, your app is in <b>Safe Mode</b>. 
+                            To unlock your personal watch history and tailored recommendations, ask a parent to verify.
+                        </p>
+                        <div class="space-y-3">
+                            <button onclick="nextVpcStep(2)" class="w-full bg-[var(--yt-blue)] text-black font-semibold text-[15px] py-3.5 rounded-full hover:bg-[#65b8ff] transition active:scale-[0.98]">
+                                Ask Parent for Consent
+                            </button>
+                            <button onclick="toggleBottomSheet(false)" class="w-full bg-transparent text-[var(--yt-light)] font-medium text-[15px] py-3.5 rounded-full hover:bg-[#333333] transition active:scale-[0.98]">
+                                Skip for now
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Input -->
+                    <div id="vpc-step-2" class="scale-in">
+                        <div class="flex items-center gap-4 mb-6 mt-1 cursor-pointer w-max group" onclick="nextVpcStep(1)">
+                            <div class="w-8 h-8 rounded-full group-hover:bg-[#333333] flex items-center justify-center transition -ml-2">
+                                <i class="fa-solid fa-arrow-left text-[var(--yt-light)]"></i>
+                            </div>
+                            <h2 class="text-xl font-bold">Send Consent Link</h2>
+                        </div>
+                        <p class="text-[var(--yt-gray)] text-[15px] mb-8 leading-relaxed">Enter your parent or guardian's mobile number. We'll send them a secure link to review your settings.</p>
+                        
+                        <div class="relative mb-8 group">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white font-medium border-r border-[#4d4d4d] pr-3 group-focus-within:text-[var(--yt-blue)] group-focus-within:border-[var(--yt-blue)] transition">+91</span>
+                            <input type="tel" id="parent-phone" placeholder="99999 99999" class="w-full bg-[var(--yt-black)] border border-[#4d4d4d] rounded-xl py-4 pl-20 pr-4 text-white text-lg focus:outline-none focus:border-[var(--yt-blue)] transition shadow-inner" value="9876543210">
+                        </div>
+
+                        <button onclick="simulateSendingLink()" class="w-full bg-[#25D366] text-black font-semibold text-[15px] py-3.5 rounded-full mb-4 hover:bg-[#20b858] transition flex justify-center items-center gap-2 active:scale-[0.98] shadow-[0_4px_14px_rgba(37,211,102,0.3)]">
+                            <i class="fa-brands fa-whatsapp text-xl"></i> Send via WhatsApp
+                        </button>
+                        <p class="text-center text-[var(--yt-gray)] text-[13px]">Standard message rates may apply.</p>
+                    </div>
+
+                    <!-- Step 3: Waiting State & Dev Tool -->
+                    <div id="vpc-step-3" class="scale-in text-center py-6">
+                        <div class="w-20 h-20 rounded-full bg-[#25D366]/10 flex items-center justify-center text-[#25D366] mx-auto mb-6 relative">
+                            <i class="fa-brands fa-whatsapp text-4xl absolute"></i>
+                            <div class="absolute w-full h-full rounded-full border-[3px] border-[#25D366] border-t-transparent animate-spin"></div>
+                        </div>
+                        <h2 class="text-[22px] font-bold mb-3">Link Sent!</h2>
+                        <p class="text-[var(--yt-gray)] text-[15px] mb-10 px-4 leading-relaxed">Waiting for your parent to review and approve your settings on their device...</p>
+                        
+                        <!-- Prototype Helper (Distinct UI) -->
+                        <div class="p-5 bg-gradient-to-br from-indigo-900/40 to-purple-900/40 rounded-2xl border border-indigo-500/30 shadow-lg relative overflow-hidden group cursor-pointer" onclick="switchToParentView()">
+                            <div class="absolute inset-0 bg-white/5 group-hover:bg-white/10 transition"></div>
+                            <div class="flex items-center justify-between relative z-10">
+                                <div class="text-left">
+                                    <p class="text-[11px] text-indigo-300 mb-1 uppercase tracking-wider font-bold">Prototype Action</p>
+                                    <p class="text-[15px] font-medium text-white">Open Parent's Phone</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="bottom-sheet-overlay" class="absolute inset-0 bg-black/80 z-40 fade-in backdrop-blur-sm" onclick="toggleBottomSheet(false)"></div>
+            
+            <div id="toast" class="absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-[var(--yt-dark)] text-white px-5 py-3.5 rounded-full text-[14px] font-medium shadow-2xl z-50 fade-in flex items-center gap-3 w-max max-w-[90%] border border-[#4d4d4d]">
+                <i class="fa-solid fa-wand-magic-sparkles text-[var(--yt-blue)]"></i> <span id="toast-msg">Settings updated!</span>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PARENT WEB VIEW (GUARDIAN'S DEVICE)        -->
+        <!-- ========================================== -->
+        <div id="parent-view" class="hidden flex-col h-full w-full absolute top-0 left-0 bg-[var(--ios-bg)] text-black z-30 transition-all duration-500 overflow-y-auto ios-font">
+            <div class="dynamic-island"></div>
+            
+            <!-- Authentic Safari Address Bar -->
+            <div class="glass-header pt-14 pb-3 px-4 border-b border-gray-200 flex items-center justify-between sticky top-0 z-20">
+                <div class="text-[var(--ios-blue)] font-medium text-lg px-2 tracking-tight">AA</div>
+                <div class="bg-black/5 rounded-xl flex-1 mx-3 py-2 px-3 text-[15px] text-gray-800 flex items-center justify-center gap-2 shadow-sm border border-black/5">
+                    <i class="fa-solid fa-lock text-gray-400 text-[11px] mt-0.5"></i>
+                    <span class="font-semibold tracking-tight">families.youtube.com</span>
+                </div>
+                <i class="fa-solid fa-rotate-right text-[var(--ios-blue)] text-lg px-2"></i>
+            </div>
+
+            <div class="p-6 bg-white text-center pb-8 pt-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4 shadow-sm border border-blue-100">
+                    <i class="fa-brands fa-youtube text-red-600 text-3xl"></i>
+                </div>
+                <h1 class="text-[24px] font-bold text-black mb-2 tracking-tight">Review Privacy Settings</h1>
+                <p class="text-[16px] text-gray-500">Manage data permissions for <span class="font-semibold text-black">Kabir (Age 14)</span></p>
+            </div>
+
+            <div class="px-4 pb-6 flex-1 bg-[var(--ios-bg)]">
+                <div class="bg-white rounded-[14px] p-4 mb-6 flex gap-3 shadow-sm border border-gray-100">
+                    <i class="fa-solid fa-circle-info text-[var(--ios-blue)] mt-0.5 text-lg shrink-0"></i>
+                    <p class="text-[14px] text-gray-700 leading-snug">
+                        To comply with the DPDP Act 2023, Kabir's account is restricted. Enable features below to unlock personalization.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-[10px] shadow-sm overflow-hidden mb-6">
+                    <!-- Toggle 1 -->
+                    <div class="flex items-center justify-between p-4 pl-5 border-b border-gray-100/80">
+                        <div class="pr-4 flex-1">
+                            <h3 class="font-semibold text-[17px] text-black mb-1">Watch & Search History</h3>
+                            <p class="text-[13px] text-gray-500 leading-snug">Allows YouTube to save history for better video recommendations.</p>
+                        </div>
+                        <label for="toggle_history" class="relative inline-flex items-center cursor-pointer shrink-0 mr-1">
+                            <input type="checkbox" id="toggle_history" class="sr-only peer toggle-checkbox">
+                            <div class="w-[51px] h-[31px] bg-[#e9e9ea] rounded-full peer peer-checked:after:translate-x-[20px] peer-checked:bg-[var(--ios-green)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[27px] after:w-[27px] after:transition-all after:shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.16)] transition-colors duration-300"></div>
+                        </label>
+                    </div>
+
+                    <!-- Toggle 2 -->
+                    <div class="flex items-center justify-between p-4 pl-5 border-b border-gray-100/80">
+                        <div class="pr-4 flex-1">
+                            <h3 class="font-semibold text-[17px] text-black mb-1">Personalized Ads</h3>
+                            <p class="text-[13px] text-gray-500 leading-snug">Shows ads based on interests. If OFF, ads will be generic.</p>
+                        </div>
+                        <label for="toggle_ads" class="relative inline-flex items-center cursor-pointer shrink-0 mr-1">
+                            <input type="checkbox" id="toggle_ads" class="sr-only peer toggle-checkbox">
+                            <div class="w-[51px] h-[31px] bg-[#e9e9ea] rounded-full peer peer-checked:after:translate-x-[20px] peer-checked:bg-[var(--ios-green)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[27px] after:w-[27px] after:transition-all after:shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.16)] transition-colors duration-300"></div>
+                        </label>
+                    </div>
+
+                    <!-- Toggle 3 -->
+                    <div class="flex items-center justify-between p-4 pl-5">
+                        <div class="pr-4 flex-1">
+                            <h3 class="font-semibold text-[17px] text-black mb-1">Precise Location</h3>
+                            <p class="text-[13px] text-gray-500 leading-snug">Uses device location for local news and weather.</p>
+                        </div>
+                        <label for="toggle_location" class="relative inline-flex items-center cursor-pointer shrink-0 mr-1">
+                            <input type="checkbox" id="toggle_location" class="sr-only peer toggle-checkbox">
+                            <div class="w-[51px] h-[31px] bg-[#e9e9ea] rounded-full peer peer-checked:after:translate-x-[20px] peer-checked:bg-[var(--ios-green)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[27px] after:w-[27px] after:transition-all after:shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.16)] transition-colors duration-300"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="p-5 bg-white border-t border-gray-200 mt-auto pb-10">
+            <div class="p-5 bg-white border-t border-gray-200 mt-auto pb-10">
+                <button onclick="showOtpScreen()" class="w-full bg-[var(--ios-blue)] text-white font-semibold text-[17px] py-3.5 rounded-[12px] shadow-sm hover:bg-blue-600 transition active:scale-[0.98]">
+                    Review & Verify
+                </button>
+                <button onclick="declineConsent()" class="w-full bg-transparent text-[var(--ios-blue)] font-semibold text-[17px] py-3.5 mt-1 rounded-[12px] transition active:scale-[0.98]">
+                    Keep Default (Restricted)
+                </button>
+            </div>
+
+            <div id="otp-screen" class="hidden absolute inset-0 bg-[var(--ios-bg)] z-40 flex-col pt-14 ios-font transform translate-x-full transition-transform duration-300">
+                <div class="glass-header flex items-center px-4 py-3 border-b border-gray-200 cursor-pointer" onclick="hideOtpScreen()">
+                    <div class="flex items-center gap-1 text-[var(--ios-blue)]">
+                        <i class="fa-solid fa-chevron-left text-lg"></i>
+                        <span class="font-semibold text-[17px]">Back</span>
+                    </div>
+                </div>
+                
+                <div class="p-6 pt-10 flex-1 bg-white">
+                    <h2 class="text-[26px] font-bold text-black mb-3 tracking-tight">Verify it's you</h2>
+                    <p class="text-[16px] text-gray-500 mb-8 leading-relaxed">Enter the 4-digit verification code sent to <b class="text-black">+91 98765 43210</b>.</p>
+                    
+                    <div class="flex justify-between gap-4 mb-10" id="otp-inputs">
+                        <input type="number" maxlength="1" class="w-full aspect-square text-center text-3xl font-semibold border-b-2 border-gray-300 focus:border-[var(--ios-blue)] focus:outline-none transition otp-input bg-transparent text-black" autofocus>
+                        <input type="number" maxlength="1" class="w-full aspect-square text-center text-3xl font-semibold border-b-2 border-gray-300 focus:border-[var(--ios-blue)] focus:outline-none transition otp-input bg-transparent text-black">
+                        <input type="number" maxlength="1" class="w-full aspect-square text-center text-3xl font-semibold border-b-2 border-gray-300 focus:border-[var(--ios-blue)] focus:outline-none transition otp-input bg-transparent text-black">
+                        <input type="number" maxlength="1" class="w-full aspect-square text-center text-3xl font-semibold border-b-2 border-gray-300 focus:border-[var(--ios-blue)] focus:outline-none transition otp-input bg-transparent text-black">
+                    </div>
+
+                    <button onclick="finalizeConsent()" class="w-full bg-[var(--ios-blue)] text-white font-semibold text-[17px] py-4 rounded-[12px] shadow-sm hover:bg-blue-600 transition flex justify-center items-center gap-2 disabled:opacity-50 active:scale-[0.98]" id="verify-btn">
+                        Verify & Save
+                    </button>
+                    
+                    <div class="text-center mt-8">
+                        <span class="text-[15px] text-[var(--ios-blue)] font-medium cursor-pointer hover:opacity-80 transition">Resend Code</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const genericVideos = [
+            { title: "Top 10 Tourist Places in India (2024)", channel: "Travel Guide", views: "1.2M", time: "2 weeks ago", duration: "12:04", img: "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "T" },
+            { title: "Learn Python for Beginners - Full Course", channel: "Code Academy", views: "850K", time: "1 month ago", duration: "1:45:20", img: "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "C" },
+            { title: "Relaxing Rain Sounds for Sleep & Focus", channel: "Nature Sounds", views: "5M", time: "1 year ago", duration: "10:00:00", img: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=600&q=80", verified: false, avatar: "N" },
+            { title: "World News Update - Live Stream", channel: "Global News", views: "20K watching", time: "LIVE", duration: "LIVE", img: "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "G" }
+        ];
+
+        const personalizedVideos = [
+            { title: "Minecraft 1.21 Update - Everything New!", channel: "GamerPro", views: "3.4M", time: "2 days ago", duration: "18:22", img: "https://images.unsplash.com/photo-1607519195048-52243d54020a?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "G" },
+            { title: "Based on your listening: Pop Mix 2024", channel: "YouTube Music", views: "Recommended for you", time: "Updated today", duration: "Mix", img: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "Y" },
+            { title: "Marvel Studios' Avengers: Secret Wars | Teaser Trailer", channel: "Marvel Entertainment", views: "15M", time: "5 hours ago", duration: "2:14", img: "https://images.unsplash.com/photo-1534809027769-625d07062137?auto=format&fit=crop&w=600&q=80", verified: true, avatar: "M" },
+            { title: "The History of Open Source Software", channel: "Tech Lore", views: "120K", time: "1 day ago", duration: "45:10", img: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=600&q=80", verified: false, avatar: "T" }
+        ];
+
+        let appState = 'non-personalized'; 
+
+        function renderVideos(type) {
+            const container = document.getElementById('video-feed');
+            container.innerHTML = '';
+            const data = type === 'personalized' ? personalizedVideos : genericVideos;
+            
+            data.forEach((video, index) => {
+                const durationBadge = video.duration === 'LIVE' 
+                    ? `<div class="absolute bottom-2 right-2 bg-red-600 text-white text-[11px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-tower-broadcast text-[9px]"></i> LIVE</div>`
+                    : `<div class="absolute bottom-2 right-2 bg-black/80 text-white text-[11px] font-medium px-1.5 py-0.5 rounded">${video.duration}</div>`;
+                
+                const verifiedIcon = video.verified 
+                    ? `<i class="fa-solid fa-circle-check text-[11px] text-[var(--yt-gray)] ml-1"></i>` : '';
+
+                const card = `
+                    <div class="w-full mb-5 cursor-pointer fade-in active" style="transition-delay: ${index * 80}ms">
+                        <div class="relative w-full aspect-video bg-[var(--yt-dark)]">
+                            <img src="${video.img}" alt="${video.title}" class="w-full h-full object-cover">
+                            ${durationBadge}
+                        </div>
+                        <div class="flex gap-3 p-3 pl-4 pr-4">
+                            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shrink-0 mt-1 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                                ${video.avatar}
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-[var(--yt-light)] font-medium text-[16px] leading-tight mb-1.5 line-clamp-2">${video.title}</h3>
+                                <div class="text-[var(--yt-gray)] text-[13px] flex items-center">
+                                    ${video.channel} ${verifiedIcon}
+                                </div>
+                                <div class="text-[var(--yt-gray)] text-[13px]">
+                                    ${video.views} • ${video.time}
+                                </div>
+                            </div>
+                            <div class="text-[var(--yt-light)] pt-1 px-2"><i class="fa-solid fa-ellipsis-vertical text-sm"></i></div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        function renderSkeletons() {
+            const container = document.getElementById('video-feed');
+            container.innerHTML = '';
+            for(let i=0; i<3; i++) {
+                container.innerHTML += `
+                    <div class="w-full mb-5">
+                        <div class="w-full aspect-video skeleton"></div>
+                        <div class="flex gap-3 p-3 pl-4 pr-4">
+                            <div class="w-9 h-9 rounded-full skeleton shrink-0 mt-1"></div>
+                            <div class="flex-1 py-1">
+                                <div class="h-4 skeleton w-11/12 mb-2.5 rounded-sm"></div>
+                                <div class="h-4 skeleton w-3/4 mb-3 rounded-sm"></div>
+                                <div class="h-3 skeleton w-1/2 rounded-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        window.onload = () => {
+            renderVideos('non-personalized');
+            setTimeout(() => {
+                if(appState === 'non-personalized') toggleBottomSheet(true);
+            }, 2500);
+
+            const inputs = document.querySelectorAll('.otp-input');
+            inputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value.length > 1) e.target.value = e.target.value.slice(0, 1);
+                    if (e.target.value !== '' && index < inputs.length - 1) inputs[index + 1].focus();
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && e.target.value === '' && index > 0) inputs[index - 1].focus();
+                });
+            });
+        };
+
+        function toggleBottomSheet(show) {
+            const sheet = document.getElementById('vpc-bottom-sheet');
+            const overlay = document.getElementById('bottom-sheet-overlay');
+            if(show) {
+                sheet.classList.add('active');
+                overlay.classList.add('active');
+                nextVpcStep(1);
+            } else {
+                sheet.classList.remove('active');
+                overlay.classList.remove('active');
+            }
+        }
+
+        function nextVpcStep(step) {
+            ['vpc-step-1', 'vpc-step-2', 'vpc-step-3'].forEach((id, idx) => {
+                const el = document.getElementById(id);
+                if(idx + 1 === step) {
+                    el.style.display = 'block';
+                    setTimeout(() => el.classList.add('active'), 10);
+                } else {
+                    el.classList.remove('active');
+                    setTimeout(() => el.style.display = 'none', 300); // Wait for transition
+                }
+            });
+        }
+
+        function simulateSendingLink() {
+            if(!document.getElementById('parent-phone').value) return;
+            nextVpcStep(3);
+        }
+
+        function switchToParentView() {
+            document.getElementById('app-view').style.opacity = '0';
+            document.getElementById('app-view').style.transform = 'scale(0.96)';
+            
+            setTimeout(() => {
+                document.getElementById('app-view').classList.add('hidden');
+                const parentView = document.getElementById('parent-view');
+                parentView.classList.remove('hidden');
+                
+                hideOtpScreen();
+                document.querySelectorAll('.toggle-checkbox').forEach(cb => cb.checked = false);
+                
+                void parentView.offsetWidth; 
+                parentView.style.opacity = '1';
+            }, 400);
+        }
+
+        function showOtpScreen() {
+            const screen = document.getElementById('otp-screen');
+            screen.classList.remove('hidden');
+            screen.classList.add('flex');
+            void screen.offsetWidth; // trigger reflow
+            screen.classList.remove('translate-x-full');
+            setTimeout(() => document.querySelectorAll('.otp-input')[0].focus(), 300);
+        }
+
+        function hideOtpScreen() {
+            const screen = document.getElementById('otp-screen');
+            screen.classList.add('translate-x-full');
+            document.querySelectorAll('.otp-input').forEach(i => i.value = '');
+            setTimeout(() => {
+                screen.classList.add('hidden');
+                screen.classList.remove('flex');
+            }, 300);
+        }
+
+        function declineConsent() { switchToAppView('non-personalized'); }
+
+        function finalizeConsent() {
+            const inputs = document.querySelectorAll('.otp-input');
+            if(!Array.from(inputs).every(i => i.value !== '')) return;
+
+            const btn = document.getElementById('verify-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                const historyOn = document.getElementById('toggle_history').checked;
+                const adsOn = document.getElementById('toggle_ads').checked;
+                const newState = (historyOn || adsOn) ? 'personalized' : 'non-personalized';
+                
+                btn.innerHTML = '<i class="fa-solid fa-check text-xl"></i>';
+                btn.style.backgroundColor = 'var(--ios-green)';
+                
+                setTimeout(() => {
+                    switchToAppView(newState);
+                    setTimeout(() => {
+                        btn.innerHTML = originalContent;
+                        btn.disabled = false;
+                        btn.style.backgroundColor = '';
+                    }, 1000);
+                }, 800);
+            }, 1200);
+        }
+
+        function switchToAppView(state) {
+            document.getElementById('parent-view').style.opacity = '0';
+            
+            setTimeout(() => {
+                document.getElementById('parent-view').classList.add('hidden');
+                const appView = document.getElementById('app-view');
+                appView.classList.remove('hidden');
+                
+                void appView.offsetWidth;
+                appView.style.opacity = '1';
+                appView.style.transform = 'scale(1)';
+                
+                toggleBottomSheet(false);
+                appState = state;
+
+                renderSkeletons();
+                
+                setTimeout(() => {
+                    renderVideos(appState);
+                    const toast = document.getElementById('toast');
+                    const toastMsg = document.getElementById('toast-msg');
+                    
+                    if(appState === 'personalized') {
+                        toastMsg.innerHTML = 'Personalized experience unlocked!';
+                        toast.querySelector('i').className = 'fa-solid fa-wand-magic-sparkles text-[var(--yt-blue)]';
+                    } else {
+                        toastMsg.innerHTML = 'Settings saved. Safe mode active.';
+                        toast.querySelector('i').className = 'fa-solid fa-shield-halved text-[var(--yt-gray)]';
+                    }
+                    
+                    toast.classList.add('active');
+                    setTimeout(() => toast.classList.remove('active'), 3500);
+                }, 1500); 
+            }, 400);
+        }
+    </script>
+</body>
+</html>
